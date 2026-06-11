@@ -1,0 +1,416 @@
+package com.ATM;
+
+import java.sql.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Scanner;
+
+class Cashpoint1 {
+    Scanner c = new Scanner(System.in);
+    double balance;
+    Connection con;
+
+    public Cashpoint1() {
+        try {
+            // Load MySQL JDBC driver
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            // Connect to the database (replace user and password as appropriate)
+            con = DriverManager.getConnection("jdbc:mysql://localhost:3306/Atm", "root", "");
+
+            // Create ministatement table 
+            String createTable = "CREATE TABLE IF NOT EXISTS ministatement (" + 
+                    "transaction_time DATE,"+
+                    "amount DOUBLE,"+
+                    "transaction_type VARCHAR(20)" +")";
+
+
+            Statement stmt = con.createStatement();
+            stmt.execute(createTable);
+            
+            String createBalanceTable = "CREATE TABLE IF NOT EXISTS account_balance (id INT PRIMARY KEY, balance DOUBLE)";
+            stmt.execute(createBalanceTable);
+
+            // Insert initial balance if not present
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM account_balance");
+            rs.next();
+            if (rs.getInt(1) == 0) {
+                stmt.executeUpdate("INSERT INTO account_balance (id, balance) VALUES (1, 10000)");
+                
+        } }
+            catch (Exception e) {
+            System.out.println("Database connection error: " + e.getMessage());
+            System.exit(0);
+        }
+    }
+    
+    
+    void updatePin(String newPin) {
+        try {
+            String query = "UPDATE account_balance SET pin = ?";
+            PreparedStatement ps = con.prepareStatement(query);
+            ps.setString(1, newPin);
+            int rowsUpdated = ps.executeUpdate();
+           // System.out.println("Rows updated: " + rowsUpdated);
+            if (rowsUpdated == 0) {
+                //System.out.println("Warning: No rows updated, check your table.");
+            	
+            }
+        } catch (SQLException e) {
+            System.out.println("Error updating PIN: " + e.getMessage());
+        }
+    }
+
+
+    void pinChange() {
+    	  System.out.println(" ");
+        System.out.print("Enter your old PIN: ");
+        String oldPinInput = c.nextLine();
+
+        String currentDbPin = loadPin(); // Load PIN from DB
+        if (currentDbPin == null) {
+        	  System.out.println(" ");
+            System.out.println("Unable to retrieve current PIN from database.");
+            return;
+        }
+
+        if (!oldPinInput.equals(currentDbPin)) {
+        	  System.out.println(" ");
+            System.out.println("Old PIN incorrect.");
+            return;
+        }
+        System.out.println(" ");
+        System.out.print("Enter your new PIN: ");
+        String newPin = c.nextLine();
+
+        if (!newPin.matches("\\d{4}")) {
+            System.out.println("PIN must be exactly 4 digits.");
+            return;
+        }
+        System.out.println(" ");
+        System.out.print("Re-enter your new PIN: ");
+        String reNewPin = c.nextLine();
+
+        if (!newPin.equals(reNewPin)) {
+        	  System.out.println(" ");
+            System.out.println("PIN mismatch, please try again.");
+            return;
+        }
+
+        updatePin(newPin); // Update PIN in DB
+        System.out.println(" ");
+        System.out.println("Your PIN change request is complete. Please remember your new PIN.");
+        System.out.println(" ");
+    }
+
+	
+	
+
+
+    
+//    void pinChange() {
+//        System.out.print("Enter your old PIN: ");
+//        String oldPin = c.nextLine();
+//
+//        if (oldPin.equals(loadPin())) {
+//            System.out.print("Enter new 4-digit PIN: ");
+//            String newPin = c.nextLine();
+//            if (!newPin.matches("\\d{4}")) {
+//                System.out.println("PIN must be exactly 4 digits");
+//                return;
+//            }
+//            System.out.print("Re-enter new PIN: ");
+//            String reNewPin = c.nextLine();
+//            if (newPin.equals(reNewPin)) {
+//                updatePin(newPin);
+//                System.out.println("PIN has been changed successfully");
+//            } else {
+//                System.out.println("PIN mismatch, please try again.");
+//            }
+//        } else {
+//            System.out.println("Old PIN incorrect.");
+//        }
+//    }
+
+    
+    String loadPin() {
+        try {
+            String query = "SELECT pin FROM account_balance";
+            PreparedStatement ps = con.prepareStatement(query);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getString("pin");
+            }
+        } catch (SQLException e) {
+            System.out.println("Error loading PIN: " + e.getMessage());
+        }
+        return null;
+    }
+
+
+    
+    void loadBalance() {
+        try {
+            String query = "SELECT balance FROM account_balance";
+            PreparedStatement ps = con.prepareStatement(query);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                balance = rs.getDouble("balance");
+            }
+        } catch (SQLException e) {
+            System.out.println("Error loading balance: " + e.getMessage());
+        }
+    }
+
+    void updateBalance() {
+        try {
+            String query = "UPDATE account_balance SET balance = ? WHERE id = 1";
+            PreparedStatement ps = con.prepareStatement(query);
+            ps.setDouble(1, balance);
+           // ps.executeUpdate();
+            int rowsUpdated = ps.executeUpdate();
+           // System.out.println("Rows updated: " + rowsUpdated);
+            if (rowsUpdated == 0) {
+                System.out.println("Warning: No rows updated, check your WHERE clause and table state.");
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Error updating balance: " + e.getMessage());
+        }
+    }
+
+
+    
+
+
+    void deposit(int dep) {
+    	loadBalance();
+        if ((dep >= 100) && (dep % 100 == 0)) {
+            balance += dep;
+            updateBalance();
+            System.out.println(" ");
+            System.out.println("You have deposited: " + dep);
+            
+            System.out.println("Your current Balance: " + balance);
+            insertTransaction("Deposit", dep);
+            System.out.println(" ");
+            System.out.println("------ Thank you for Banking with ICICI ------");
+            System.out.println(" ");
+        } else if (dep < 100) {
+        	System.out.println(" ");
+            System.out.println("The minimum deposit amount should be 100");
+            System.out.println(" ");
+        } else {
+        	System.out.println(" ");
+            System.out.println("\tCheck the amount you have deposited");
+            System.out.println(" ");
+        }
+    }
+
+    void withdrawl(int withdrawl) {
+    	loadBalance();
+        if ((balance - withdrawl <= 5000) && (withdrawl != 0)) {
+            System.out.println("------- Insufficient balance to withdraw -------");
+            System.out.println(" ");
+            System.exit(0);
+        } else if (withdrawl <= 0) {
+            System.out.println("Error! Enter Valid Amount");
+            System.out.println(" ");
+        } else if (withdrawl % 100 != 0) {
+            System.out.println("Verify the amount to be withdrawal");
+            System.out.println(" ");
+        } 
+        else if(withdrawl>=15000)
+        {
+        	System.out.println("For a successful withdrawal, \nplease stay within your allowed transaction limits.");
+        	System.out.println(" ");
+        }
+        		else {
+            balance -= withdrawl;
+            updateBalance();
+            System.out.println("You have withdrawl:" +withdrawl);
+            System.out.println("Your current balance: " + balance);
+            insertTransaction("Withdrawal", withdrawl);
+            System.out.println(" ");
+            System.out.println("------ Thank you for Banking with ICICI ------");
+            System.out.println(" ");
+        }
+    }
+
+    // Insert transaction into ministatement table
+    void insertTransaction(String type, double amount) {
+        try {
+        	String query = "INSERT INTO ministatement (transaction_time, amount, transaction_type) VALUES (?, ?, ?)";
+        	PreparedStatement ps = con.prepareStatement(query);
+
+        	// Convert LocalDateTime to LocalDate and then to java.sql.Date to keep only the date part
+        	java.sql.Date sqlDate = java.sql.Date.valueOf(LocalDateTime.now().toLocalDate());
+
+        	ps.setDate(1, sqlDate); // Set only the date part
+        	ps.setDouble(2, amount);
+        	ps.setString(3, type);
+
+           
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            System.out.println("Error inserting transaction: " + e.getMessage());
+        }
+    }
+
+    // Print last 5 transactions from database
+    void printMiniStatement() {
+        System.out.println("=================================================");
+        System.out.println("\t\tWelcome to ICICI Bank");
+        System.out.println("--------------------------------------------------");
+        dateTime();
+        System.out.println("--------------------------------------------------");
+        System.out.println("\t\tMini Statement");
+        System.out.println(" ");
+        try {
+            String query = "SELECT transaction_time, amount, transaction_type FROM ministatement ORDER BY transaction_time DESC LIMIT 5";
+            PreparedStatement ps = con.prepareStatement(query);
+            ResultSet rs = ps.executeQuery();
+
+            while (rs.next()) {
+                Timestamp timestamp = rs.getTimestamp("transaction_time");
+                // Convert to LocalDate to keep only the date part
+                LocalDate dateOnly = timestamp.toLocalDateTime().toLocalDate();
+                
+                // Format the date as dd-MM-yyyy if needed
+                String formattedDate = dateOnly.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+                
+                System.out.println(formattedDate + " : " + rs.getDouble("amount") + " on " + rs.getString("transaction_type"));
+                System.out.println();
+            }
+
+            System.out.println(" ");
+            System.out.println("------ Thank you for banking with ICICI ------");
+            System.out.println(" ");
+        } catch (SQLException e) {
+            System.out.println("Error fetching mini statement: " + e.getMessage());
+        }
+       // System.out.println("=================================================");
+    }
+
+    void currentBalance() {
+    	
+    	loadBalance();
+        System.out.println("Your Available Balance: " + balance);
+        System.out.println("");
+        System.out.println("------ Thank you for Banking with ICICI ------");
+        System.out.println("");
+    }
+
+    void dateTime() {
+    	// Current date
+		 LocalDate currentDate = LocalDate.now();
+		
+
+		 // Current time 
+		 LocalTime currentTime = LocalTime.now();
+		 
+		 // Current date and time
+		 LocalDateTime currentDateTime = LocalDateTime.now();
+		
+
+		 // Formatting date
+		 DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+		
+		 String formattedDate = currentDate.format(dateFormatter);
+
+		// System.out.println("Date " + formattedDate );
+
+		 // Formatting time
+		 DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+		 String formattedTime = currentTime.format(timeFormatter);
+		 System.out.println("Date " + formattedDate + "\t\t\tTime " + formattedTime );
+		
+    }
+    
+  
+	
+}
+
+public class Atm_Db {
+    public static void main(String[] args) {
+       // String PIN = cash.loadPin();
+        boolean accessGranted = false;
+        Scanner scan = new Scanner(System.in);
+
+        Cashpoint1 cash = new Cashpoint1();
+
+        cash.dateTime();
+        System.out.println("====================================================");
+        System.out.println("\t\tWelcome to ICICI Bank");
+        System.out.println(" ");
+
+        for (int i = 1; i <= 3; i++) {
+            System.out.print("Please enter your PIN: ");
+            String inputPin = scan.nextLine();
+            System.out.println();
+
+            String currentPin = cash.loadPin();  // Load fresh PIN from DB every attempt
+            if (currentPin != null && currentPin.equals(inputPin)) {
+                System.out.println("---------- PIN verified successfully ----------");
+                System.out.println(" ");
+                accessGranted = true;
+                break;
+            } else {
+                if (i < 3) {
+                    System.out.println("Incorrect PIN. You have " + (3 - i) + " attempt(s) left.");
+                    System.out.println();
+                }
+            }
+        }
+
+
+        while (true) {
+            System.out.println("===================================================");
+            System.out.println("\t\t     ICICI BANK");
+            System.out.println("\t1. Deposit ");
+            System.out.println("\t2. Withdrawal ");
+            System.out.println("\t3. Check Balance  ");
+            System.out.println("\t4. Mini Statement");
+            System.out.println("\t5. PIN Change");
+            System.out.println("\t6. Exit");
+            System.out.println("====================================================");
+            System.out.print("Enter your choice: ");
+            int choice = scan.nextInt();
+            System.out.println();
+
+            switch (choice) {
+                case 1:
+                    System.out.print("Enter your Amount to deposit: ");
+                    int dep = scan.nextInt();
+                    cash.deposit(dep);
+                    break;
+                case 2:
+                    System.out.print("Enter the amount to Withdrawal: ");
+                    int withdraw = scan.nextInt();
+                    System.out.println();
+                    cash.withdrawl(withdraw);
+                    break;
+                case 3:
+                    cash.currentBalance();
+                    break;
+                case 4:
+                    cash.printMiniStatement();
+                    break;
+                    
+                case 5:
+                    cash.pinChange();
+                    break;
+
+                	
+                case 6:
+                    System.out.println("\tThank you for banking with ICICI.");
+                    System.exit(0);
+                    break;
+                default:
+                    System.out.println("Please try again.");
+                    System.out.println();
+            }
+        }
+    }
+}
